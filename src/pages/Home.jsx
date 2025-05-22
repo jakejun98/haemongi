@@ -206,7 +206,7 @@ export default function Home() {
                   <strong>🔑 키워드:</strong> {d.keywords?.join(", ")}
                 </p>
                 <p>
-                  <strong>💬 감정 분석:</strong> {d.emotion}
+                  <strong>💬 감정분석:</strong> {d.emotion}
                 </p>
                 <p>
                   <strong>🧠 해석:</strong> {d.interpretation}
