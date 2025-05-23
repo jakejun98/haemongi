@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Textarea from "../components/textarea";
 import Button from "../components/button";
 import { Card, CardContent } from "../components/card";
 import { Loader2 } from "lucide-react";
+import EmotionChart from "../components/EmotionChart";
 import "../main.css";
 
 import { db, auth } from "../firebaseConfig";
@@ -17,6 +18,10 @@ import {
   deleteDoc,
   doc,
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+
+const emotionLabels = ["불안", "기쁨", "슬픔", "분노", "혼란", "평온"];
+
 
 export default function Home() {
   const [input, setInput] = useState("");
@@ -24,6 +29,15 @@ export default function Home() {
   const [result, setResult] = useState(null);
   const [showDreams, setShowDreams] = useState(false);
   const [dreams, setDreams] = useState([]);
+  const [user, setUser] = useState(null);
+  const [emotionSummary, setEmotionSummary] = useState(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleInterpret = async () => {
     if (!input.trim()) return;
@@ -43,7 +57,9 @@ export default function Home() {
             {
               role: "system",
               content:
-                "당신은 해몽 전문가입니다. 사용자의 꿈 내용을 읽고 아래 포맷에 맞춰 해석하세요. 모든 응답은 한국어로 작성하세요.\n\n키워드: ...\n감정: ...\n해석: ...\n조언: ...",
+                "당신은 해몽 전문가입니다. 사용자의 꿈 내용을 읽고 아래 포맷에 맞춰 해석하세요. 모든 응답은 한국어로 작성하세요.\n\n"
+                + "감정은 반드시 다음 중 하나로만 작성하세요: 불안, 기쁨, 슬픔, 분노, 혼란, 평온.\n\n"+ 
+                "키워드: ...\n감정: ...\n해석: ...\n조언: ..."
             },
             {
               role: "user",
@@ -70,13 +86,12 @@ export default function Home() {
         })
       );
 
-      console.log("GPT 응답 결과:", parsed);
 
       const resultObj = {
         keywords: parsed["키워드"]
           ? parsed["키워드"].split(",").map((k) => k.trim())
           : [],
-        emotion: parsed["감정"] ?? "",
+          emotion: parsed["감정"]?.split(",")[0].trim() ?? "",
         interpretation: parsed["해석"] ?? "",
         advice: parsed["조언"] ?? "",
       };
@@ -112,7 +127,19 @@ export default function Home() {
       const snapshot = await getDocs(q);
       const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setDreams(data);
+
+      const counter = {};
+      emotionLabels.forEach((label) => (counter[label] = 0));
+      data.forEach((d) => {
+        if (d.emotion && counter[d.emotion] !== undefined) {
+          counter[d.emotion]++;
+        }
+      });
+      setEmotionSummary(counter);
+      
     }
+    
+
     if (showDreams) {
       setInput("");
       setResult(null);
@@ -123,7 +150,17 @@ export default function Home() {
 
   const deleteDream = async (id) => {
     await deleteDoc(doc(db, "dreams", id));
-    setDreams(dreams.filter((d) => d.id !== id));
+    const updated = dreams.filter((d) => d.id !== id);
+    setDreams(updated);
+
+    const counter = {};
+    emotionLabels.forEach((label) => (counter[label] = 0));
+    updated.forEach((d) => {
+      if (d.emotion && counter[d.emotion] !== undefined) {
+        counter[d.emotion]++;
+      }
+    });
+    setEmotionSummary(counter);
   };
 
   return (
@@ -187,6 +224,10 @@ export default function Home() {
 
       {showDreams && (
         <div className="space-y-4 pt-12">
+          {emotionSummary && (
+            <EmotionChart data={emotionSummary} />
+          )} 
+
           {dreams.map((d) => (
             <Card key={d.id} className="bg-white text-black relative">
               <CardContent className="p-4 space-y-2">
@@ -222,3 +263,4 @@ export default function Home() {
     </div>
   );
 }
+
